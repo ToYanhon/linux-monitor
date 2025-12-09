@@ -1,0 +1,4 @@
+file(GLOB_RECURSE PERFORMANCE_INSTANCE_FILES src/*.cpp)
+add_executable(performance_instance ${PERFORMANCE_INSTANCE_FILES})
+target_link_libraries(performance_instance PRIVATE performance_server)
+target_include_directories(performance_instance PUBLIC include)

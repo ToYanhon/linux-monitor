@@ -1,0 +1,16 @@
+syntax = "proto3";
+package monitor.proto;
+
+message SoftIrq {
+    string cpu = 1;
+    uint32 hi = 2;// high priority软中断
+    uint32 timer = 3;// timer软中断
+    uint32 net_tx = 4;// 网络发送软中断
+    uint32 net_rx = 5;// 网络接收软中断
+    uint32 block = 6;// 块设备软中断
+    uint32 irq_poll = 7;// 中断轮询软中断
+    uint32 tasklet = 8;// tasklet软中断, 一种轻量的延迟执行机制
+    uint32 sched = 9;// 调度软中断
+    uint32 hrtimer = 10;//高精度定时器软中断
+    uint32 rcu = 11;// RCU软中断, 用于实现Read-Copy-Update机制
+}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+package monitor.proto;
+
+message DiskInfo {
+  string name = 1;
+  uint64 reads = 2;// 读取操作数
+  uint64 writes = 3;
+  uint64 sectors_read = 4;// 读取扇区数
+  uint64 sectors_written = 5;
+  uint64 read_time_ms = 6;// 读取时间，单位毫秒
+  uint64 write_time_ms = 7;
+  uint64 io_in_progress = 8;// 当前正在进行的I/O操作数
+  uint64 io_time_ms = 9;// I/O操作总时间，单位毫秒
+  uint64 weighted_io_time_ms = 10;// 加权I/O时间，单位毫秒
+
+  // 速率/变化率字段
+  double read_bytes_per_sec = 20;
+  double write_bytes_per_sec = 21;
+  double read_iops = 22;
+  double write_iops = 23;// 每秒写操作数
+  double avg_read_latency_ms = 24;// 平均读取延迟，单位毫秒
+  double avg_write_latency_ms = 25;// 平均写入延迟，单位毫秒
+  double util_percent = 26;// 磁盘利用率百分比
+}

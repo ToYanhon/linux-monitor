@@ -1,0 +1,80 @@
+syntax = "proto3";
+package monitor.proto;
+
+// 内存信息消息结构
+message MemInfo {
+    // 总内存大小（单位：MB）
+    float total = 1;
+    
+    // 空闲内存大小（单位：MB）
+    float free = 2;
+    
+    // 可用内存大小（单位：MB）
+    // 注意：包含可回收的内存，通常大于free，即未使用的内存+可回收缓存
+    float avail = 3;
+    
+    // 缓冲区使用的内存（单位：MB）
+    // 用于块设备I/O的缓存
+    float buffers = 4;
+    
+    // 页面缓存大小（单位：MB）
+    // 文件系统缓存，可被回收
+    float cached = 5;
+    
+    // 交换区缓存大小（单位：MB）
+    // 已换出但被缓存的页面
+    float swap_cached = 6;
+    
+    // 活跃内存大小（单位：MB）
+    // 最近被使用过的内存
+    float active = 7;
+    
+    // 非活跃内存大小（单位：MB）
+    // 最近未被使用的内存，可能被回收
+    float inactive = 8;
+    
+    // 活跃匿名页大小（单位：MB）
+    // 活跃的与文件无关的内存页（如进程堆栈）
+    float active_anon = 9;
+    
+    // 非活跃匿名页大小（单位：MB）
+    float inactive_anon = 10;
+    
+    // 活跃文件缓存大小（单位：MB）
+    // 活跃的文件映射内存页
+    float active_file = 11;
+    
+    // 非活跃文件缓存大小（单位：MB）
+    // 可回收的文件缓存
+    float inactive_file = 12;
+    
+    // 等待写回磁盘的脏页大小（单位：MB）
+    float dirty = 13;
+    
+    // 正在写回磁盘的页面大小（单位：MB）
+    float writeback = 14;
+    
+    // 匿名页大小（单位：MB）
+    // 无文件背景的内存页
+    float anon_pages = 15;
+    
+    // 内存映射大小（单位：MB）
+    // 内存映射的文件和设备
+    float mapped = 16;
+    
+    // 内核可回收内存大小（单位：MB）
+    // 内核中可被回收的内存
+    float kReclaimable = 17;
+    
+    // Slab可回收内存大小（单位：MB）
+    // 内核对象缓存中可回收的部分
+    float sReclaimable = 18;
+    
+    // Slab不可回收内存大小（单位：MB）
+    // 内核对象缓存中不可回收的部分
+    float sUnreclaim = 19;
+    
+    // 内存使用百分比
+    // 计算公式通常为：(total - available) / total * 100
+    float used_percent = 31;
+}

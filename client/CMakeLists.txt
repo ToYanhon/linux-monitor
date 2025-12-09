@@ -1,0 +1,3 @@
+file(GLOB_RECURSE CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+add_executable(${PROJECT_NAME} ${CLIENT_SOURCES})
+target_link_libraries(${PROJECT_NAME} PRIVATE monitor client)
