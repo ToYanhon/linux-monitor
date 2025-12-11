@@ -6,9 +6,11 @@ target_link_libraries(monitor PUBLIC
     monitor_proto 
 )
 
-# 查找 BCC 库
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(BCC bcc)
+# 查找 BCC 库（可选，如果找不到则跳过）
+find_package(PkgConfig)
+if(PkgConfig_FOUND)
+    pkg_check_modules(BCC bcc)
+endif()
 
 # 如果 pkg-config 找不到，手动指定路径
 if(NOT BCC_FOUND)
@@ -29,5 +31,6 @@ if(BCC_FOUND)
     # 链接到你的目标
     target_link_libraries(monitor PUBLIC ${BCC_LIBRARIES})
 else()
-    message(FATAL_ERROR "BCC library not found. Please install libbcc-dev")
+    message(WARNING "BCC library not found. eBPF features will be disabled.")
+    target_compile_definitions(monitor PUBLIC -DNO_BCC)
 endif()

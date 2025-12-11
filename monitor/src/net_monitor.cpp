@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <bcc/BPF.h>
+// #include <bcc/BPF.h>
 #include <unistd.h>
 
 namespace yanhon {
@@ -69,144 +69,153 @@ static std::map<std::string, EbpfStats> ebpf_get_net_stats() {
       std::getline(file, line);
       while (std::getline(file, line)) {
         char ifname_c[IF_NAMESIZE + 1];
-        uint64_t rcv_bytes, rcv_packets, rcv_errs, rcv_drop, rcv_fifo, rcv_frame,
-            rcv_compressed, rcv_multicast;
-        uint64_t snd_bytes, snd_packets, snd_errs, snd_drop, snd_fifo, snd_colls,
-            snd_carrier, snd_compressed;
-        int ret = std::sscanf(
-            line.c_str(),
-            " %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu",
-            ifname_c, &rcv_bytes, &rcv_packets, &rcv_errs, &rcv_drop, &rcv_fifo,
-            &rcv_frame, &rcv_compressed, &rcv_multicast, &snd_bytes, &snd_packets,
-            &snd_errs, &snd_drop, &snd_fifo, &snd_colls, &snd_carrier,
-            &snd_compressed);
+        uint64_t rcv_bytes, rcv_packets, rcv_errs, rcv_drop, rcv_fifo,
+            rcv_frame, rcv_compressed, rcv_multicast;
+        uint64_t snd_bytes, snd_packets, snd_errs, snd_drop, snd_fifo,
+            snd_colls, snd_carrier, snd_compressed;
+        int ret = std::sscanf(line.c_str(),
+                              " %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu "
+                              "%lu %lu %lu %lu %lu",
+                              ifname_c, &rcv_bytes, &rcv_packets, &rcv_errs,
+                              &rcv_drop, &rcv_fifo, &rcv_frame, &rcv_compressed,
+                              &rcv_multicast, &snd_bytes, &snd_packets,
+                              &snd_errs, &snd_drop, &snd_fifo, &snd_colls,
+                              &snd_carrier, &snd_compressed);
         if (ret >= 17) {
           std::string ifname = ifname_c;
-          if (!ifname.empty() && ifname.back() == ':') { ifname.pop_back(); }
+          if (!ifname.empty() && ifname.back() == ':') {
+            ifname.pop_back();
+          }
           if (!is_virtual_interface(ifname)) {
-            stats_map[ifname] = {rcv_bytes, rcv_packets, snd_bytes, snd_packets};
+            stats_map[ifname] = {rcv_bytes, rcv_packets, snd_bytes,
+                                 snd_packets};
           }
         }
       }
     }
     return stats_map;
   }
-  static std::unique_ptr<ebpf::BPF> bpf;
-  static bool initialized = false;
-  std::map<std::string, EbpfStats> stats_map;
+  // static std::unique_ptr<ebpf::BPF> bpf;
+  // static bool initialized = false;
+  // std::map<std::string, EbpfStats> stats_map;
 
-  if (!initialized) {
-    const std::string program = R"(
-      #include <uapi/linux/ptrace.h>
-      #include <linux/skbuff.h>
-      #include <linux/netdevice.h>
-      struct val_t { u64 rcv_bytes; u64 rcv_packets; u64 snd_bytes; u64 snd_packets; };
-      BPF_HASH(ifstats, u32, struct val_t, 1024);
+  // if (!initialized) {
+  //   const std::string program = R"(
+  //     #include <uapi/linux/ptrace.h>
+  //     #include <linux/skbuff.h>
+  //     #include <linux/netdevice.h>
+  //     struct val_t { u64 rcv_bytes; u64 rcv_packets; u64 snd_bytes; u64
+  //     snd_packets; }; BPF_HASH(ifstats, u32, struct val_t, 1024);
 
-      static __always_inline int update_rcv(struct sk_buff *skb) {
-        struct net_device *dev = NULL;
-        bpf_probe_read_kernel(&dev, sizeof(dev), &skb->dev);
-        if (!dev) return 0;
-        u32 ifindex = 0; u32 len = 0;
-        bpf_probe_read_kernel(&ifindex, sizeof(ifindex), &dev->ifindex);
-        bpf_probe_read_kernel(&len, sizeof(len), &skb->len);
-        struct val_t *val = ifstats.lookup(&ifindex);
-        if (val) { val->rcv_bytes += len; val->rcv_packets += 1; }
-        else { struct val_t zero = {}; zero.rcv_bytes = len; zero.rcv_packets = 1; ifstats.update(&ifindex, &zero); }
-        return 0;
-      }
+  //     static __always_inline int update_rcv(struct sk_buff *skb) {
+  //       struct net_device *dev = NULL;
+  //       bpf_probe_read_kernel(&dev, sizeof(dev), &skb->dev);
+  //       if (!dev) return 0;
+  //       u32 ifindex = 0; u32 len = 0;
+  //       bpf_probe_read_kernel(&ifindex, sizeof(ifindex), &dev->ifindex);
+  //       bpf_probe_read_kernel(&len, sizeof(len), &skb->len);
+  //       struct val_t *val = ifstats.lookup(&ifindex);
+  //       if (val) { val->rcv_bytes += len; val->rcv_packets += 1; }
+  //       else { struct val_t zero = {}; zero.rcv_bytes = len; zero.rcv_packets
+  //       = 1; ifstats.update(&ifindex, &zero); } return 0;
+  //     }
 
-      static __always_inline int update_snd(struct sk_buff *skb) {
-        struct net_device *dev = NULL;
-        bpf_probe_read_kernel(&dev, sizeof(dev), &skb->dev);
-        if (!dev) return 0;
-        u32 ifindex = 0; u32 len = 0;
-        bpf_probe_read_kernel(&ifindex, sizeof(ifindex), &dev->ifindex);
-        bpf_probe_read_kernel(&len, sizeof(len), &skb->len);
-        struct val_t *val = ifstats.lookup(&ifindex);
-        if (val) { val->snd_bytes += len; val->snd_packets += 1; }
-        else { struct val_t zero = {}; zero.snd_bytes = len; zero.snd_packets = 1; ifstats.update(&ifindex, &zero); }
-        return 0;
-      }
+  //     static __always_inline int update_snd(struct sk_buff *skb) {
+  //       struct net_device *dev = NULL;
+  //       bpf_probe_read_kernel(&dev, sizeof(dev), &skb->dev);
+  //       if (!dev) return 0;
+  //       u32 ifindex = 0; u32 len = 0;
+  //       bpf_probe_read_kernel(&ifindex, sizeof(ifindex), &dev->ifindex);
+  //       bpf_probe_read_kernel(&len, sizeof(len), &skb->len);
+  //       struct val_t *val = ifstats.lookup(&ifindex);
+  //       if (val) { val->snd_bytes += len; val->snd_packets += 1; }
+  //       else { struct val_t zero = {}; zero.snd_bytes = len; zero.snd_packets
+  //       = 1; ifstats.update(&ifindex, &zero); } return 0;
+  //     }
 
-      int trace_netif_receive_skb(struct pt_regs *ctx) {
-        struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
-        if (!skb) return 0;
-        return update_rcv(skb);
-      }
+  //     int trace_netif_receive_skb(struct pt_regs *ctx) {
+  //       struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
+  //       if (!skb) return 0;
+  //       return update_rcv(skb);
+  //     }
 
-      int trace_dev_queue_xmit(struct pt_regs *ctx) {
-        struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
-        if (!skb) return 0;
-        return update_snd(skb);
-      }
-    )";
+  //     int trace_dev_queue_xmit(struct pt_regs *ctx) {
+  //       struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
+  //       if (!skb) return 0;
+  //       return update_snd(skb);
+  //     }
+  //   )";
 
-    bpf.reset(new ebpf::BPF());
-    auto st = bpf->init(program);
-    if (!st.ok()) {
-      return stats_map;
-    }
-    st = bpf->attach_kprobe("netif_receive_skb", "trace_netif_receive_skb");
-    if (!st.ok()) {
-      bpf->attach_kprobe("netif_receive_skb_core", "trace_netif_receive_skb");
-    }
-    st = bpf->attach_kprobe("dev_queue_xmit", "trace_dev_queue_xmit");
-    if (!st.ok()) {
-      return stats_map;
-    }
-    initialized = true;
-  }
+  //   bpf.reset(new ebpf::BPF());
+  //   auto st = bpf->init(program);
+  //   if (!st.ok()) {
+  //     return stats_map;
+  //   }
+  //   st = bpf->attach_kprobe("netif_receive_skb", "trace_netif_receive_skb");
+  //   if (!st.ok()) {
+  //     bpf->attach_kprobe("netif_receive_skb_core",
+  //     "trace_netif_receive_skb");
+  //   }
+  //   st = bpf->attach_kprobe("dev_queue_xmit", "trace_dev_queue_xmit");
+  //   if (!st.ok()) {
+  //     return stats_map;
+  //   }
+  //   initialized = true;
+  // }
 
-  struct Val { uint64_t rcv_bytes; uint64_t rcv_packets; uint64_t snd_bytes; uint64_t snd_packets; };
-  auto table = bpf->get_hash_table<uint32_t, Val>("ifstats");
-  std::vector<std::pair<uint32_t, Val>> entries = table.get_table_offline();
-  if (entries.empty()) {
-    // 回退：当 eBPF 不可用或尚未采集到数据时，使用 /proc 获取 bytes/packets
-    std::ifstream file("/proc/net/dev");
-    if (file.is_open()) {
-      std::string line;
-      std::getline(file, line);
-      std::getline(file, line);
-      while (std::getline(file, line)) {
-        char ifname_c[IF_NAMESIZE + 1];
-        uint64_t rcv_bytes, rcv_packets, rcv_errs, rcv_drop, rcv_fifo, rcv_frame,
-            rcv_compressed, rcv_multicast;
-        uint64_t snd_bytes, snd_packets, snd_errs, snd_drop, snd_fifo, snd_colls,
-            snd_carrier, snd_compressed;
-        int ret = std::sscanf(
-            line.c_str(),
-            " %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu",
-            ifname_c, &rcv_bytes, &rcv_packets, &rcv_errs, &rcv_drop, &rcv_fifo,
-            &rcv_frame, &rcv_compressed, &rcv_multicast, &snd_bytes, &snd_packets,
-            &snd_errs, &snd_drop, &snd_fifo, &snd_colls, &snd_carrier,
-            &snd_compressed);
-        if (ret >= 17) {
-          std::string ifname = ifname_c;
-          if (!ifname.empty() && ifname.back() == ':') { ifname.pop_back(); }
-          if (!is_virtual_interface(ifname)) {
-            stats_map[ifname] = {rcv_bytes, rcv_packets, snd_bytes, snd_packets};
-          }
-        }
-      }
-    }
-    return stats_map;
-  }
-  for (const auto &kv : entries) {
-    uint32_t ifindex = kv.first;
-    const auto &v = kv.second;
-    char name[IF_NAMESIZE] = {0};
-    if (if_indextoname(ifindex, name) == nullptr) {
-      continue;
-    }
-    std::string ifname = name;
-    if (is_virtual_interface(ifname)) {
-      continue;
-    }
-    stats_map[ifname] = {v.rcv_bytes, v.rcv_packets, v.snd_bytes, v.snd_packets};
-  }
+  // struct Val { uint64_t rcv_bytes; uint64_t rcv_packets; uint64_t snd_bytes;
+  // uint64_t snd_packets; }; auto table = bpf->get_hash_table<uint32_t,
+  // Val>("ifstats"); std::vector<std::pair<uint32_t, Val>> entries =
+  // table.get_table_offline(); if (entries.empty()) {
+  //   // 回退：当 eBPF 不可用或尚未采集到数据时，使用 /proc 获取 bytes/packets
+  //   std::ifstream file("/proc/net/dev");
+  //   if (file.is_open()) {
+  //     std::string line;
+  //     std::getline(file, line);
+  //     std::getline(file, line);
+  //     while (std::getline(file, line)) {
+  //       char ifname_c[IF_NAMESIZE + 1];
+  //       uint64_t rcv_bytes, rcv_packets, rcv_errs, rcv_drop, rcv_fifo,
+  //       rcv_frame,
+  //           rcv_compressed, rcv_multicast;
+  //       uint64_t snd_bytes, snd_packets, snd_errs, snd_drop, snd_fifo,
+  //       snd_colls,
+  //           snd_carrier, snd_compressed;
+  //       int ret = std::sscanf(
+  //           line.c_str(),
+  //           " %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu
+  //           %lu", ifname_c, &rcv_bytes, &rcv_packets, &rcv_errs, &rcv_drop,
+  //           &rcv_fifo, &rcv_frame, &rcv_compressed, &rcv_multicast,
+  //           &snd_bytes, &snd_packets, &snd_errs, &snd_drop, &snd_fifo,
+  //           &snd_colls, &snd_carrier, &snd_compressed);
+  //       if (ret >= 17) {
+  //         std::string ifname = ifname_c;
+  //         if (!ifname.empty() && ifname.back() == ':') { ifname.pop_back(); }
+  //         if (!is_virtual_interface(ifname)) {
+  //           stats_map[ifname] = {rcv_bytes, rcv_packets, snd_bytes,
+  //           snd_packets};
+  //         }
+  //       }
+  //     }
+  //   }
+  //   return stats_map;
+  // }
+  // for (const auto &kv : entries) {
+  //   uint32_t ifindex = kv.first;
+  //   const auto &v = kv.second;
+  //   char name[IF_NAMESIZE] = {0};
+  //   if (if_indextoname(ifindex, name) == nullptr) {
+  //     continue;
+  //   }
+  //   std::string ifname = name;
+  //   if (is_virtual_interface(ifname)) {
+  //     continue;
+  //   }
+  //   stats_map[ifname] = {v.rcv_bytes, v.rcv_packets, v.snd_bytes,
+  //   v.snd_packets};
+  // }
 
-  return stats_map;
+  // return stats_map;
 }
 
 // ----------------------------------------------------------------------

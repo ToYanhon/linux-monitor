@@ -1,0 +1,55 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: linux-monitor-mysql
+    network_mode: host
+    environment:
+      # 保持与 PerformanceMonitorClient 默认配置一致
+      MYSQL_ROOT_PASSWORD: your_password
+      MYSQL_DATABASE: monitor_db
+    volumes:
+      - ../sql/init_server_performance.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: server-runtime
+    container_name: linux-monitor-server
+    network_mode: host
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: client-runtime
+    container_name: linux-monitor-client
+    network_mode: host
+    privileged: true
+    volumes:
+      - /dev/cpu_load_monitor:/dev/cpu_load_monitor
+      - /dev/cpu_stat_monitor:/dev/cpu_stat_monitor
+      - /dev/cpu_softirq_monitor:/dev/cpu_softirq_monitor
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  performance_instance:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: perf-runtime
+    container_name: linux-monitor-performance-instance
+    network_mode: host
+    depends_on:
+      - server
+      - mysql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
