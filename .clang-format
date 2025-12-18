@@ -1,0 +1,4 @@
+Language: Cpp
+# 更多配置项...
+SortIncludes: false  # 关键设置：禁止对include头文件进行排序
+# IncludeBlocks: Preserve  # 可选设置：保留头文件原有的分组块

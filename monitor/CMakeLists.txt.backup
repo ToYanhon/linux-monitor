@@ -1,0 +1,37 @@
+file(GLOB_RECURSE MONITOR_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+
+add_library(monitor STATIC ${MONITOR_FILES})
+target_include_directories(monitor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(monitor PUBLIC 
+    monitor_proto 
+)
+
+# 查找 libbpf 库
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBBPF libbpf)
+
+# 如果 pkg-config 找不到，手动指定路径
+if(NOT LIBBPF_FOUND)
+    # message(STATUS "LIBBPF not found via pkg-config, trying manual search...")
+    # 尝试手动查找
+    find_path(LIBBPF_INCLUDE_DIR bpf/bpf.h PATH_SUFFIXES bpf)
+    find_library(LIBBPF_LIBRARY bpf)
+    
+    if(LIBBPF_INCLUDE_DIR AND LIBBPF_LIBRARY)
+        set(LIBBPF_INCLUDE_DIRS ${LIBBPF_INCLUDE_DIR})
+        set(LIBBPF_LIBRARIES ${LIBBPF_LIBRARY})
+        set(LIBBPF_FOUND TRUE)
+    endif()
+endif()
+
+if(LIBBPF_FOUND)
+    message(STATUS "Found libbpf: ${LIBBPF_LIBRARIES}")
+    target_include_directories(monitor PUBLIC ${LIBBPF_INCLUDE_DIRS})
+    # 链接到你的目标
+    target_link_libraries(monitor PUBLIC ${LIBBPF_LIBRARIES})
+else()
+    message(FATAL_ERROR "libbpf library not found. Please install libbpf-dev")
+endif()
+
+# 添加对生成的skel.h文件的include路径
+target_include_directories(monitor PUBLIC ${CMAKE_SOURCE_DIR}/include)

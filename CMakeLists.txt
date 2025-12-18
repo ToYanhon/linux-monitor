@@ -8,6 +8,9 @@ set(CMAKE_CXX_EXTENSION OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_subdirectory(bpf)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
 add_subdirectory(proto)
 add_subdirectory(kmod)
 add_subdirectory(monitor)
