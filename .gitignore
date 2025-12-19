@@ -16,3 +16,5 @@ kmod/*.order.*
 
 *.log
 .cache/
+
+third_party/

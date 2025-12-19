@@ -83,6 +83,9 @@
 - Protobuf/gRPC：`sudo apt install -y protobuf-compiler libprotobuf-dev libgrpc++-dev`
 - MySQL 客户端库：`sudo apt install -y libmysqlclient-dev`
 - BCC 与内核头：`sudo apt install -y libbcc-dev linux-headers-$(uname -r)`
+- libbpf 依赖（用于网络监控）：
+  - 系统 libbpf：`sudo apt install -y libbpf-dev libbpf0`
+  - 如果遇到 BTF 错误（内核 6.8+），需要安装 libbpf 1.2.0：运行 `./install_libbpf.sh`
 - 如使用非系统包的 gRPC/Protobuf 安装，请在 CMake 配置时设置 `Protobuf_DIR` 与 `gRPC_DIR`。
 
 ## 构建与运行
@@ -115,22 +118,30 @@
 - 运行示例：`./build/performance_instance/performance_instance`（默认连接 `localhost:50051` 并每 60 秒拉取与入库）。
 
 ## 快速启动
-1. 构建
+1. 安装依赖
+   - 基础依赖：`sudo apt update && sudo apt install -y build-essential cmake protobuf-compiler libprotobuf-dev libgrpc++-dev libmysqlclient-dev libbcc-dev linux-headers-$(uname -r) libbpf-dev libbpf0`
+   - 如果遇到 BTF 错误（内核 6.8+）：运行 `./install_libbpf.sh`
+
+2. 构建
    - `cmake -S . -B build`
    - `cmake --build build -j`
-2. 构建并加载内核模块
+
+3. 构建并加载内核模块
    - `cmake --build build --target modules -j`
    - `sudo insmod kmod/cpu_stat_monitor.ko`
    - `sudo insmod kmod/cpu_load_monitor.ko`
    - `sudo insmod kmod/cpu_softirq_monitor.ko`
-3. 初始化数据库（MySQL）
+
+4. 初始化数据库（MySQL，可选）
    - `mysql -u <user> -p`
    - `source <project_dir>/sql/init_server_performance.sql`
-4. 启动项目
+
+5. 启动项目
    - 服务器：`./build/server/server`
    - 客户端：`./build/client/Linux-monitor`
-   - 入库实例：`./build/performance_instance/performance_instance`
-5. 观察日志
+   - 入库实例（可选）：`./build/performance_instance/performance_instance`
+
+6. 观察日志
    - 服务端将在 `SetMonitorInfo` 调用时输出各项指标（见 `grpc/server/src/server.cpp:1-124`）。
 
 ### 环境依赖
@@ -154,6 +165,12 @@
   - IDE 指向 `build/compile_commands.json`。
 - gRPC 插件未找到：
   - 确认系统存在 `grpc_cpp_plugin`，并由 `proto/CMakeLists.txt:1-24` 获取其 LOCATION。
+- 运行时报 BTF 错误（Unsupported BTF_KIND:19）：
+  - 问题：系统 libbpf 0.5.0 与内核 6.8+ 的 BTF 格式不兼容。
+  - 解决方案：安装 libbpf 1.2.0 到项目目录。
+    1. 运行安装脚本：`chmod +x install_libbpf.sh && sudo ./install_libbpf.sh`
+    2. 重新构建项目：`rm -rf build && mkdir build && cd build && cmake .. && make -j$(nproc)`
+    3. 详细指南见 `INSTALL_LIBBPF.md`
 - 单位换算：
   - 内存 KB→GB；网络速率以 `KB/s`；磁盘扇区按 512 字节换算。
 

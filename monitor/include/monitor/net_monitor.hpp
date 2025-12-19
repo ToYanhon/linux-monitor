@@ -63,5 +63,6 @@ private:
   bool *hooks_created_ingress = NULL;
   bool *hooks_created_egress = NULL;
   struct if_counters total = {0};
+  bool bpf_loaded = false;
 };
 } // namespace yanhon

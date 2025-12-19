@@ -10,11 +10,18 @@ target_link_libraries(monitor PUBLIC
 option(USE_LOCAL_LIBBPF "Use locally compiled libbpf" ON)
 
 if(USE_LOCAL_LIBBPF)
-    # 使用本地编译的 libbpf
-    set(LOCAL_LIBBPF_DIR "/tmp/libbpf-install/usr")
+    # 使用项目内编译的 libbpf
+    set(LOCAL_LIBBPF_DIR "${CMAKE_SOURCE_DIR}/third_party/libbpf-install/usr")
     if(EXISTS ${LOCAL_LIBBPF_DIR})
         set(LIBBPF_INCLUDE_DIRS ${LOCAL_LIBBPF_DIR}/include)
-        set(LIBBPF_LIBRARIES ${LOCAL_LIBBPF_DIR}/lib64/libbpf.a)
+        # 查找库文件，可能是lib64或lib目录
+        if(EXISTS ${LOCAL_LIBBPF_DIR}/lib64/libbpf.a)
+            set(LIBBPF_LIBRARIES ${LOCAL_LIBBPF_DIR}/lib64/libbpf.a)
+        elseif(EXISTS ${LOCAL_LIBBPF_DIR}/lib/libbpf.a)
+            set(LIBBPF_LIBRARIES ${LOCAL_LIBBPF_DIR}/lib/libbpf.a)
+        else()
+            message(WARNING "libbpf.a not found in ${LOCAL_LIBBPF_DIR}/lib64 or ${LOCAL_LIBBPF_DIR}/lib")
+        endif()
         set(LIBBPF_FOUND TRUE)
         message(STATUS "Using local libbpf from ${LOCAL_LIBBPF_DIR}")
     else()

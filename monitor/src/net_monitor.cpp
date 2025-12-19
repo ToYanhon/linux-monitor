@@ -163,6 +163,12 @@ static std::unordered_map<int, std::string> get_network_interfaces() {
 std::unordered_map<std::string, if_counters> NetMonitor::ebpf_get_net_stats() {
   std::unordered_map<std::string, if_counters> states_map;
 
+  // 如果BPF没有加载成功，返回空map
+  if (!skel || !bpf_loaded) {
+    fprintf(stderr, "BPF not loaded, cannot get network statistics\n");
+    return std::move(states_map);
+  }
+
   int key = 0, next_key;
   int err;
   auto map = skel->maps.if_stats;
@@ -341,8 +347,13 @@ NetMonitor::NetMonitor() {
   skel = net_monitor_bpf__open_and_load();
   if (!skel) {
     fprintf(stderr, "Failed to open and load BPF object\n");
+    // 设置skel为nullptr并返回，避免后续操作
+    skel = nullptr;
+    bpf_loaded = false;
     return;
   }
+
+  bpf_loaded = true;
 
   // int err = net_monitor_bpf__load(skel);
   // if (err) {
@@ -371,6 +382,12 @@ NetMonitor::NetMonitor() {
       !tc_opts_egress || !hooks_created_ingress || !hooks_created_egress) {
     fprintf(stderr, "Failed to allocate memory for TC hooks\n");
     net_monitor_bpf__destroy(skel);
+    return;
+  }
+
+  // 如果BPF加载失败，直接返回，不初始化TC钩子
+  if (!bpf_loaded) {
+    fprintf(stderr, "BPF not loaded, skipping TC hook initialization\n");
     return;
   }
 
