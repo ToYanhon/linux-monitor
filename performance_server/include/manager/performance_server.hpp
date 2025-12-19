@@ -81,6 +81,14 @@ private:
   calculateNetworkTotalThroughput(const monitor::proto::NetInfo &net_info);
   float calculateNetworkTotalPackets(const monitor::proto::NetInfo &net_info);
 
+  // 性能评分计算
+  float calculateCPUScore(const monitor::proto::MonitorInfo &info);
+  float calculateMemoryScore(const monitor::proto::MonitorInfo &info);
+  float calculateDiskScore(const monitor::proto::MonitorInfo &info);
+  float calculateNetworkScore(const monitor::proto::MonitorInfo &info);
+  float
+  calculateOverallPerformanceScore(const monitor::proto::MonitorInfo &info);
+
   // 插入数据到各个表
   bool insertHostInfo(const monitor::proto::MonitorInfo &info);
   bool insertCPUMetrics(const monitor::proto::MonitorInfo &info,

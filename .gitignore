@@ -10,6 +10,7 @@ kmod/*.symvers.*
 
 kmod/*.ko
 kmod/*.ko.*
+kmod/*.o
 
 kmod/*.order
 kmod/*.order.*

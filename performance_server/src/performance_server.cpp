@@ -185,6 +185,190 @@ float PerformanceMonitorClient::calculateNetworkTotalPackets(
   return net_info.send_packets_rate() + net_info.rcv_packets_rate();
 }
 
+// 性能评分计算方法实现
+float PerformanceMonitorClient::calculateCPUScore(
+    const monitor::proto::MonitorInfo &info) {
+  if (info.cpu_stat_size() == 0) {
+    return 0.0f;
+  }
+
+  float total_cpu_score = 0.0f;
+  int cpu_count = 0;
+
+  // 计算每个CPU的得分
+  for (int i = 0; i < info.cpu_stat_size(); ++i) {
+    const auto &cpu_stat = info.cpu_stat(i);
+
+    // CPU使用率得分：使用率越低得分越高（0-100%映射到100-0分）
+    float cpu_usage = cpu_stat.cpu_percent();
+    float cpu_usage_score = std::max(0.0f, 100.0f - cpu_usage);
+
+    // 负载得分：负载越低得分越高
+    float load_score = 0.0f;
+    if (info.has_cpu_load()) {
+      float load_avg = info.cpu_load().load_avg_1();
+      // 假设每个CPU核心对应1.0的负载为正常
+      // 这里简化处理：负载小于2.0得100分，大于10.0得0分，线性插值
+      load_score = std::max(0.0f, 100.0f - (load_avg * 10.0f));
+      load_score = std::min(100.0f, load_score);
+    }
+
+    // CPU综合得分：使用率权重70%，负载权重30%
+    float cpu_score = (cpu_usage_score * 0.7f) + (load_score * 0.3f);
+    total_cpu_score += cpu_score;
+    cpu_count++;
+  }
+
+  return cpu_count > 0 ? total_cpu_score / cpu_count : 0.0f;
+}
+
+float PerformanceMonitorClient::calculateMemoryScore(
+    const monitor::proto::MonitorInfo &info) {
+  if (!info.has_mem_info()) {
+    return 0.0f;
+  }
+
+  const auto &mem_info = info.mem_info();
+
+  // 内存使用率得分：使用率越低得分越高
+  float memory_usage = mem_info.used_percent();
+  float usage_score = std::max(0.0f, 100.0f - memory_usage);
+
+  // 可用内存得分：可用内存越多得分越高
+  float available_gb = mem_info.avail();
+  float available_score = 0.0f;
+  if (mem_info.total() > 0) {
+    float available_percent = (available_gb / mem_info.total()) * 100.0f;
+    available_score =
+        std::min(100.0f, available_percent * 2.0f); // 50%可用得100分
+  }
+
+  // 缓存效率得分：缓存越多得分越高（但有限制）
+  float cache_gb = calculateCacheTotalGB(mem_info);
+  float cache_score = 0.0f;
+  if (mem_info.total() > 0) {
+    float cache_percent = (cache_gb / mem_info.total()) * 100.0f;
+    // 缓存占10-30%为最佳，得100分
+    if (cache_percent >= 10.0f && cache_percent <= 30.0f) {
+      cache_score = 100.0f;
+    } else if (cache_percent < 10.0f) {
+      cache_score = cache_percent * 10.0f; // 线性增长
+    } else {
+      cache_score = std::max(0.0f, 100.0f - (cache_percent - 30.0f) * 5.0f);
+    }
+  }
+
+  // 内存综合得分：使用率权重50%，可用内存权重30%，缓存效率权重20%
+  float memory_score =
+      (usage_score * 0.5f) + (available_score * 0.3f) + (cache_score * 0.2f);
+  return std::min(100.0f, memory_score);
+}
+
+float PerformanceMonitorClient::calculateDiskScore(
+    const monitor::proto::MonitorInfo &info) {
+  if (info.disk_info_size() == 0) {
+    return 0.0f;
+  }
+
+  float total_disk_score = 0.0f;
+  int disk_count = 0;
+
+  for (int i = 0; i < info.disk_info_size(); ++i) {
+    const auto &disk_info = info.disk_info(i);
+
+    // 磁盘使用率得分：使用率越低得分越高
+    float util_percent = disk_info.util_percent();
+    float util_score = std::max(0.0f, 100.0f - util_percent);
+
+    // I/O延迟得分：延迟越低得分越高
+    float latency_score = 100.0f;
+    float read_latency = disk_info.avg_read_latency_ms();
+    float write_latency = disk_info.avg_write_latency_ms();
+
+    if (read_latency > 0 || write_latency > 0) {
+      float avg_latency = (read_latency + write_latency) / 2.0f;
+      // 假设10ms以下为优秀，100ms以上为差
+      latency_score = std::max(0.0f, 100.0f - (avg_latency * 2.0f));
+    }
+
+    // I/O队列长度得分：队列越短得分越高
+    float queue_length = calculateDiskAvgQueueLength(disk_info);
+    float queue_score = std::max(0.0f, 100.0f - (queue_length * 20.0f));
+
+    // 磁盘综合得分：使用率权重40%，延迟权重30%，队列长度权重30%
+    float disk_score =
+        (util_score * 0.4f) + (latency_score * 0.3f) + (queue_score * 0.3f);
+    total_disk_score += disk_score;
+    disk_count++;
+  }
+
+  return disk_count > 0 ? total_disk_score / disk_count : 0.0f;
+}
+
+float PerformanceMonitorClient::calculateNetworkScore(
+    const monitor::proto::MonitorInfo &info) {
+  if (info.net_info_size() == 0) {
+    return 0.0f;
+  }
+
+  float total_network_score = 0.0f;
+  int network_count = 0;
+
+  for (int i = 0; i < info.net_info_size(); ++i) {
+    const auto &net_info = info.net_info(i);
+
+    // 网络吞吐量得分：吞吐量适中为佳（既不过低也不过载）
+    float throughput = calculateNetworkTotalThroughput(net_info);
+    float throughput_score = 0.0f;
+
+    // 假设100Mbps为理想值，超过1Gbps可能过载
+    if (throughput <= 100.0f) {
+      throughput_score = throughput; // 线性增长到100分
+    } else {
+      throughput_score = std::max(0.0f, 100.0f - (throughput - 100.0f) / 10.0f);
+    }
+
+    // 数据包大小得分：平均包大小适中为佳
+    float avg_packet_size = calculateNetworkAvgPacketSize(net_info);
+    float packet_size_score = 0.0f;
+
+    // 假设理想包大小为1500字节（MTU）
+    if (avg_packet_size > 0) {
+      float diff = std::abs(avg_packet_size - 1500.0f);
+      packet_size_score = std::max(0.0f, 100.0f - diff / 15.0f);
+    }
+
+    // 网络综合得分：吞吐量权重60%，包大小权重40%
+    float network_score =
+        (throughput_score * 0.6f) + (packet_size_score * 0.4f);
+    total_network_score += network_score;
+    network_count++;
+  }
+
+  return network_count > 0 ? total_network_score / network_count : 0.0f;
+}
+
+float PerformanceMonitorClient::calculateOverallPerformanceScore(
+    const monitor::proto::MonitorInfo &info) {
+  // 计算各维度得分
+  float cpu_score = calculateCPUScore(info);
+  float memory_score = calculateMemoryScore(info);
+  float disk_score = calculateDiskScore(info);
+  float network_score = calculateNetworkScore(info);
+
+  // 加权综合得分：CPU 30%，内存 25%，磁盘 25%，网络 20%
+  float overall_score = (cpu_score * 0.3f) + (memory_score * 0.25f) +
+                        (disk_score * 0.25f) + (network_score * 0.2f);
+
+  // 输出调试信息
+  std::cout << "Performance Scores - CPU: " << cpu_score
+            << ", Memory: " << memory_score << ", Disk: " << disk_score
+            << ", Network: " << network_score << ", Overall: " << overall_score
+            << std::endl;
+
+  return std::min(100.0f, std::max(0.0f, overall_score));
+}
+
 bool PerformanceMonitorClient::ensureHostExists(const std::string &host_name) {
   std::string query =
       "SELECT host_id FROM host_info WHERE host_name = '" + host_name + "'";
@@ -479,42 +663,110 @@ bool PerformanceMonitorClient::updatePerformanceSummary(
   char time_str[100];
   std::strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:00:00", &tm);
 
-  // 简化版本的性能摘要更新
-  std::string query = "INSERT INTO performance_summary ("
-                      "host_id, time_bucket, bucket_type, "
-                      "avg_cpu_percent, max_cpu_percent, "
-                      "avg_load_1, max_load_1, "
-                      "avg_memory_usage, max_memory_usage"
-                      ") "
-                      "SELECT "
-                      "'" +
-                      host_id +
-                      "', "
-                      "'" +
-                      time_str +
-                      "', "
-                      "'hourly', "
-                      "AVG(cpu_percent), MAX(cpu_percent), "
-                      "AVG(load_avg_1), MAX(load_avg_1), "
-                      "AVG(used_percent), MAX(used_percent) "
-                      "FROM cpu_metrics cm "
-                      "JOIN memory_metrics mm ON cm.host_id = mm.host_id "
-                      "WHERE cm.host_id = '" +
-                      host_id +
-                      "' "
-                      "AND cm.timestamp >= DATE_SUB('" +
-                      time_str +
-                      "', INTERVAL 1 HOUR) "
-                      "AND cm.timestamp <= '" +
-                      time_str +
-                      "' "
-                      "ON DUPLICATE KEY UPDATE "
-                      "avg_cpu_percent = VALUES(avg_cpu_percent), "
-                      "max_cpu_percent = VALUES(max_cpu_percent), "
-                      "avg_load_1 = VALUES(avg_load_1), "
-                      "max_load_1 = VALUES(max_load_1), "
-                      "avg_memory_usage = VALUES(avg_memory_usage), "
-                      "max_memory_usage = VALUES(max_memory_usage)";
+  // 获取最新的监控数据来计算性能得分
+  monitor::proto::MultiMonitorInfo data_copy;
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    data_copy = current_data_;
+  }
+
+  float performance_score = 0.0f;
+  bool has_score = false;
+
+  // 查找对应主机的监控信息
+  for (int i = 0; i < data_copy.infos_size(); ++i) {
+    const auto &monitor_info = data_copy.infos(i);
+
+    // 获取主机名
+    std::string host_name = monitor_info.name();
+    std::string current_host_id = getOrCreateHostId(host_name);
+
+    if (current_host_id == host_id) {
+      // 计算性能得分
+      performance_score = calculateOverallPerformanceScore(monitor_info);
+      has_score = true;
+      break;
+    }
+  }
+
+  // 构建查询，包含性能得分
+  std::string query =
+      "INSERT INTO performance_summary ("
+      "host_id, time_bucket, bucket_type, "
+      "avg_cpu_percent, max_cpu_percent, "
+      "avg_load_1, max_load_1, "
+      "avg_memory_usage, max_memory_usage, "
+      "min_available_memory_gb, "
+      "max_disk_util, avg_disk_iops, "
+      "peak_disk_throughput_mbps, "
+      "avg_network_throughput_mbps, "
+      "peak_network_throughput_mbps, "
+      "performance_score"
+      ") "
+      "SELECT "
+      "'" +
+      host_id +
+      "', "
+      "'" +
+      time_str +
+      "', "
+      "'hourly', "
+      "AVG(cpu_percent), MAX(cpu_percent), "
+      "AVG(load_avg_1), MAX(load_avg_1), "
+      "AVG(used_percent), MAX(used_percent), "
+      "MIN(available_gb), "
+      "MAX(util_percent), AVG(read_iops + write_iops), "
+      "MAX(read_mbps + write_mbps), "
+      "AVG(send_rate_mbps + rcv_rate_mbps), "
+      "MAX(send_rate_mbps + rcv_rate_mbps), " +
+      (has_score ? std::to_string(performance_score) : "NULL") +
+      " "
+      "FROM cpu_metrics cm "
+      "LEFT JOIN memory_metrics mm ON cm.host_id = mm.host_id "
+      "AND mm.timestamp >= DATE_SUB('" +
+      time_str +
+      "', INTERVAL 1 HOUR) "
+      "AND mm.timestamp <= '" +
+      time_str +
+      "' "
+      "LEFT JOIN disk_metrics dm ON cm.host_id = dm.host_id "
+      "AND dm.timestamp >= DATE_SUB('" +
+      time_str +
+      "', INTERVAL 1 HOUR) "
+      "AND dm.timestamp <= '" +
+      time_str +
+      "' "
+      "LEFT JOIN network_metrics nm ON cm.host_id = nm.host_id "
+      "AND nm.timestamp >= DATE_SUB('" +
+      time_str +
+      "', INTERVAL 1 HOUR) "
+      "AND nm.timestamp <= '" +
+      time_str +
+      "' "
+      "WHERE cm.host_id = '" +
+      host_id +
+      "' "
+      "AND cm.timestamp >= DATE_SUB('" +
+      time_str +
+      "', INTERVAL 1 HOUR) "
+      "AND cm.timestamp <= '" +
+      time_str +
+      "' "
+      "GROUP BY cm.host_id "
+      "ON DUPLICATE KEY UPDATE "
+      "avg_cpu_percent = VALUES(avg_cpu_percent), "
+      "max_cpu_percent = VALUES(max_cpu_percent), "
+      "avg_load_1 = VALUES(avg_load_1), "
+      "max_load_1 = VALUES(max_load_1), "
+      "avg_memory_usage = VALUES(avg_memory_usage), "
+      "max_memory_usage = VALUES(max_memory_usage), "
+      "min_available_memory_gb = VALUES(min_available_memory_gb), "
+      "max_disk_util = VALUES(max_disk_util), "
+      "avg_disk_iops = VALUES(avg_disk_iops), "
+      "peak_disk_throughput_mbps = VALUES(peak_disk_throughput_mbps), "
+      "avg_network_throughput_mbps = VALUES(avg_network_throughput_mbps), "
+      "peak_network_throughput_mbps = VALUES(peak_network_throughput_mbps), "
+      "performance_score = VALUES(performance_score)";
 
   return executeQuery(query);
 }
